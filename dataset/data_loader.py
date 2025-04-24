@@ -88,21 +88,32 @@ class DataLoader(object):
 
         #dataset._stastic_ids()
 #
-
-
-        world_size = 1
-        if dist.is_initialized():
-            sampler = torch.utils.data.distributed.DistributedSampler(dataset)
-            world_size = dist.get_world_size()
+        world_size = dist.get_world_size()
+        if split == 'train':
+            sampler = torch.utils.data.distributed.DistributedSampler(
+                dataset,
+                num_replicas=dist.get_world_size(),
+                rank=dist.get_rank(),
+                shuffle=True,
+                seed=self.configer.get("seed")
+            )
         else:
             sampler = None
+
+
+        # world_size = 1
+        # if dist.is_initialized():
+        #     sampler = torch.utils.data.distributed.DistributedSampler(dataset)
+        #     world_size = dist.get_world_size()
+        # else:
+        #     sampler = None
 
         data_loader = data.DataLoader(
             dataset,
             batch_size=self.configer.get(split, 'batch_size') //world_size , pin_memory=True,
             num_workers=self.configer.get('data', 'workers') ,
             sampler=sampler,
-            shuffle= False if split=='val' else True,
+            shuffle= False,
             #collate_fn= custom_collate_fn
             #drop_last=self.configer.get('data', 'drop_last'),
             collate_fn=lambda *args: custom_collate_fn(

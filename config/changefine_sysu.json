@@ -19,7 +19,7 @@
     "batch_size": 12,
     "use_amp": true,
     "loader": "sam_clip_cd",
-    "exchange": 0.5,
+    "exchange": 0.0,
     "mode":"cd",
     "warm_up_epoch":0,
     "epoch":100,
@@ -56,7 +56,7 @@
   },
   "train_trans": {
     "aug_mode":"cutmix",
-    "trans_seq": ["random_crop","random_hflip","random_resize","resize","random_rotate","random_saturation"],
+    "trans_seq": ["random_hflip","random_resize","resize","random_rotate","random_crop","random_saturation"],
     "trans_image": ["oldimg","newimg"],
     "random_brightness": {
       "ratio": 0.5,
@@ -141,23 +141,24 @@
   },
   "network":{
     "bn_type": "torchbn",
-    "prompt": "",
-    "clip": {
+
+     "clip": {
       "name":"ViT-B/16"
     },
+    "params": {
+      "prompt": "clipsam",
+      "context_length": 77,
+      "sam_dim": 768,
+      "clip_dim": 768,
+      "text_dim": 512,
+      "width": 512,
+      "feats_exchange": null,
+      "feats_fusion": "SCAM",
+      "attn_drop": 0.1,
+      "proj_drop":0.1,
+      "n_pts": 5000
+    },
     "neck":
-    {
-      "params": {
-         "use_pyrid":false,
-         "feats_exchange": "CCMAT",
-         "feats_fusion": "TBAM",
-         "encoder_dim":768,
-         "n_cross_head":16,
-         "n_cross_layer":1,
-         "proj_drop": 0.0,
-         "attn_drop": 0.0
-      },
-      "fusion":
       {
         "name":"uper_head",
         "fusion":"cross",
@@ -170,45 +171,8 @@
           "embed_dim": 512,
           "out_dim": 8192
         }
-      }
     },
 
-    "context_decoder": {
-      "params": {
-        "transformer_width":256,
-         "transformer_heads":4,
-         "transformer_layers":6,
-         "visual_dim":256,
-         "dropout":0.0
-      }
-    },
-    "text_context_encoder": {
-         "context_length":20,
-         "vocab_size":49408,
-         "transformer_width":512,
-         "transformer_heads":8,
-         "transformer_layers":12,
-         "embed_dim":512,
-         "out_dim":256
-      },
-    "image_encoder": {
-        "params":{
-          "image_resolution": 512,
-          "vision_layers": 12,
-          "vision_width":768,
-          "vision_patch_size": 16,
-          "embed_dim": 512
-        }
-      },
-    "text_encoder": {
-        "params":{
-          "context_length": 77,
-          "transformer_width": 512,
-          "transformer_heads": 8,
-          "transformer_layers": 12,
-          "vocab_size": 49408
-          }
-      },
 
     "loss_weights": {
       "aux_loss": 0.4,
@@ -225,7 +189,7 @@
     "tb_name": "sysu"
   },
   "lr": {
-    "base_lr": 0.00002,
+    "base_lr": 0.00001,
     "metric": "iters",
     "lr_policy": "lambda_poly",
     "warm": {
@@ -239,7 +203,7 @@
   },
   "solver": {
     "display_iter": 10,
-    "test_interval": 1000,
+    "test_interval": 500,
     "max_iters": 500000
   },
   "optim": {

@@ -6,19 +6,13 @@ Official PyTorch implementation of ChangeFine:<br>
 Kai Deng*, Siyuan Wei*, Xiangyun Hu<br>
 (*Equal contribution)<br>
 
-Abstract: Foundation models like SAM and CLIP are increasingly applied in computer vision due to their strong generalization and semantic understanding capabilities.
-However, directly applying these models to change detection remains challenging due to semantic degradation in complex scenes, inconsistencies in multiscale structural features, 
-and the ambiguity of fine-grained change localization.
-To address these issues, we propose a prompt-guided supervised change detection method named ChangeFine that effectively fuses structural representations from SAM, semantic priors from CLIP, 
-and change-aware prompts to achieve precise and fine-grained change localization across bi-temporal remote sensing imagery.
-Specifically, we first propose the SAM-CLIP Feature Encoder (SCFE) to bridge the modality gap between structural perception and semantic understanding, fully leveraging the complementary priors of vision and language. 
-To better handle ambiguous regions (hard pixels), we design a Hard Sample Contrast Module (HSCM) that dynamically mines highly uncertain samples to guide the model in learning more discriminative boundaries. 
-In addition, inspired by the concept of semantic evolution, we develop a Prompt Change Decoder (PCD) that progressively reconstructs change regions from coarse to fine by combining explicit predictions and implicit semantic differences as prompts.
-Extensive experiments conducted on five public remote sensing change detection datasets demonstrate that ChangePrompt achieves superior performance in terms of both accuracy and robustness. 
-The code and datasets are available at https://github.com/whudk/ChangeFine.
+Abstract: Change detection is crucial for remote sensing applications, widely used in urban planning, environmental monitoring, and disaster response. However, existing change detection methods face several challenges, such as difficulty in distinguishing suspected change features, ambiguous boundaries, and inconsistencies in multi-scale features.
+To address these issues, we propose a binary change detection method called ChangeFine. This method effectively fuses the detailed features extracted by SAM and the semantic priors provided by CLIP, combined with adaptive mixture-of-experts fusion and change prompt guidance, achieving precise and fine-grained change localization in bi-temporal remote sensing imagery.
+Specifically, we design the SAM-CLIP Feature Encoder (SCFE), which bridges the modality gap between structural perception and semantic understanding. We introduce the Cross-Perception Feature Module (CPFM), which integrates gated mixture-of-experts and channel–spatial attention mechanisms, enabling fine-grained interaction and adaptive fusion between bi-temporal features, and effectively enhancing the extraction of change-specific features. To handle ambiguous regions (i.e., hard pixels), we introduce the Hard Sample Contrast Module (HSCM), which dynamically identifies highly uncertain samples and helps the model accurately learn discriminative boundaries. Furthermore, inspired by the concept of semantic evolution, we design the Prompt Change Decoder (PCD), which progressively integrates explicit predictions with implicit semantic differences to refine the reconstruction of change regions, achieving a coarse-to-fine change localization.
+Extensive experiments conducted on four public remote sensing change detection datasets demonstrate that ChangeFine achieves significant improvements in both accuracy and robustness. The code and datasets are available at https://github.com/whudk/ChangeFine.
 
 <div align='center'>
-<img src="Image/network_v1.png" alt="Architecture"  style="display: block;"/>
+<img src="Image/network_v2_00.png" alt="Architecture"  style="display: block;"/>
 </div>
 
 ⚙️ Requirements

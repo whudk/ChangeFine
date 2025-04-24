@@ -315,7 +315,9 @@ class SamClipCD_dataset(torch.utils.data.Dataset):
 
 
         if self.num_classes  == 2:
-            label[label > 0] = 1
+            label[label < 127] = 0
+            label[label >= 127] = 1
+
 
         # label[label <= 127] = 0
         # label[label  > 127 ] = 1

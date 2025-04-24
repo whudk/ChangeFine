@@ -10,20 +10,20 @@
     "image_tool": "cv2",
     "input_mode": "BGR",
     "num_classes": 2,
-    "classnames": "config/classnames.xml",
+    "classnames": "config/builddings.xml",
     "data_dir": "",
     "check_path": false,
     "workers": 0,
     "input_size": 256
   },
   "train": {
-    "batch_size": 12,
+    "batch_size": 24,
     "use_amp": true,
     "loader": "sam_clip_cd",
     "exchange": 0.5,
     "mode":"cd",
     "warm_up_epoch": 0,
-    "epoch":100,
+    "epoch":150,
     "fp16": true,
     "unsupervised":{
       "drop_percent":80
@@ -36,7 +36,7 @@
     }
   },
   "val": {
-    "batch_size": 12,
+    "batch_size":32 ,
     "mode": "ms_test",
     "loader": "sam_clip_cd",
 
@@ -60,7 +60,7 @@
   },
   "train_trans": {
     "aug_mode":"cutmix",
-    "trans_seq": ["random_crop","random_hflip","random_resize","resize","random_saturation"],
+    "trans_seq": ["random_hflip","random_rotate","random_resize","random_crop","random_saturation"],
     "trans_image": ["oldimg","newimg"],
     "random_brightness": {
       "ratio": 0.5,
@@ -126,44 +126,43 @@
     "mean_value": [0.34552284, 0.33819557, 0.28881545],
     "left": {
       "div_value": 255.0,
-      "mean_value":  [0.34552284, 0.33819557, 0.28881545],
-      "mean": [0.34552284, 0.33819557, 0.28881545],
-      "std": [0.12937803, 0.12601846, 0.11878689]
+      "mean_value":  [0.48145466, 0.4578275, 0.40821073],
+      "mean": [0.48145466, 0.4578275, 0.40821073],
+      "std": [0.26862954, 0.26130258, 0.27577711]
     },
     "right": {
       "div_value": 255.0,
-       "mean_value":  [0.34552284, 0.33819557, 0.28881545],
-      "mean": [0.34552284, 0.33819557, 0.28881545],
-      "std": [0.12937803, 0.12601846, 0.11878689]
+      "mean_value":  [0.48145466, 0.4578275, 0.40821073],
+      "mean": [0.48145466, 0.4578275, 0.40821073],
+      "std": [0.26862954, 0.26130258, 0.27577711]
     }
   },
   "checkpoints": {
     "checkpoints_root": "./checkpoints",
-    "checkpoints_name": "levircd",
+    "checkpoints_name": "levircd_fusion_whole",
     "checkpoints_dir": "changefine",
     "save_iters": 500
   },
   "network":{
     "bn_type": "torchbn",
-    "prompt": "",
-    "clip": {
+
+     "clip": {
       "name":"ViT-B/16"
     },
-    "name": "clip_change",
+    "params": {
+      "prompt": "clipsam",
+      "context_length": 77,
+      "sam_dim": 768,
+      "clip_dim": 768,
+      "text_dim": 512,
+      "width": 512,
+      "feats_exchange": null,
+      "feats_fusion": "SCAM",
+      "attn_drop": 0.1,
+      "proj_drop":0.1,
+      "n_pts": 5000
+    },
     "neck":
-    {
-      "name":"head_shpcd",
-      "params": {
-         "use_pyrid":false,
-         "feats_exchange": "CCMAT",
-         "feats_fusion": "TBAM",
-         "encoder_dim":768,
-         "n_cross_head":16,
-         "n_cross_layer":1,
-         "proj_drop": 0.0,
-         "attn_drop": 0.0
-      },
-      "fusion":
       {
         "name":"uper_head",
         "fusion":"cross",
@@ -176,41 +175,8 @@
           "embed_dim": 512,
           "out_dim": 8192
         }
-      }
     },
 
-    "context_decoder": {
-      "params": {
-        "transformer_width":256,
-         "transformer_heads":4,
-         "transformer_layers":6,
-         "visual_dim":256,
-         "dropout":0.0
-      }
-    },
-    "text_context_encoder": {
-         "context_length":20,
-         "vocab_size":49408,
-         "transformer_width":512,
-         "transformer_heads":8,
-         "transformer_layers":12,
-         "embed_dim":512,
-         "out_dim":256
-      },
-    "image_encoder": {
-        "params":{
-
-        }
-      },
-    "text_encoder": {
-        "params":{
-          "context_length": 77,
-          "transformer_width": 512,
-          "transformer_heads": 8,
-          "transformer_layers": 12,
-          "vocab_size": 49408
-          }
-      },
 
     "loss_weights": {
       "aux_loss": 0.4,
@@ -220,7 +186,7 @@
   "logging": {
     "logfile_level": "info",
     "stdout_level": "info",
-    "log_file": "./log/rsdata/levircd_1024.log",
+    "log_file": "./log/rsdata/levircd_256.log",
     "log_format": "%(asctime)s %(levelname)-7s %(message)s",
     "rewrite": true,
     "tb_logger": "tb_logger",
@@ -241,7 +207,7 @@
   },
   "solver": {
     "display_iter": 10,
-    "test_interval": 500,
+    "test_interval": 300,
     "max_iters": 500000
   },
   "optim": {
@@ -249,18 +215,11 @@
     "adamw": {
       "betas": [0.9, 0.999],
       "eps": 1e-06,
-      "weight_decay": 0.0001
-    },
-    "sgd":{
-      "weight_decay": 0.0001,
-      "momentum": 0.9,
-      "nesterov": false
+      "weight_decay": 0.05
     }
   },
   "loss": {
     "loss_type": "contrast_loss",
-    "patch_algin": true,
-    "pixel_algin": false,
     "ce_loss": true,
     "params": {
       "ce_reduction": "mean",
@@ -268,6 +227,10 @@
       "ohem_minkeep":100000,
       "ohem_thresh": 0.7,
       "loss_weight": 0.7
+    },
+    "focal_loss": {
+      "alpha": 0.2,
+      "gamma": 1.0
     },
     "celoss_weight": 0.7
   },

@@ -10,7 +10,7 @@
     "image_tool": "cv2",
     "input_mode": "BGR",
     "num_classes": 2,
-    "classnames": "config/builddings.xml",
+    "classnames": "config/classnames.xml",
     "data_dir": "",
     "check_path": false,
     "workers": 0,
@@ -154,7 +154,7 @@
       "params": {
          "use_pyrid":false,
          "feats_exchange": "CCMAT",
-         "feats_fusion": "TBAM",
+         "feats_fusion": "MoE",
          "encoder_dim":768,
          "n_cross_head":16,
          "n_cross_layer":1,

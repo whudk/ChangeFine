@@ -1216,11 +1216,4 @@ TRANSFORM_SPEC = {
             "max_side_length": "max_side_length"
         }
     }],
-
 }
-
-
-def __init__(self, max_shift=10, apply_to_both=True, prob=0.5):
-    self.max_shift = max_shift
-    self.apply_to_both = apply_to_both
-    self.prob = prob

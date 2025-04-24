@@ -1,0 +1,205 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TransBM>
+	<!--DLBM And TransID!-->
+	<BM key="0"  val="0"/>
+	<BM key="1"  val="1"/>
+	<BM key="2"  val="1"/>
+	<BM key="3"  val="1"/>
+	<BM key="4"  val="1"/>
+	<BM key="5"  val="1"/>
+	<BM key="6"  val="1"/>
+	<BM key="7"  val="1"/>
+	<BM key="8"  val="1"/>
+	<BM key="9"  val="1"/>
+	<BM key="10" val="1"/>
+	<BM key="11" val="1"/>
+	<BM key="12" val="1"/>
+	<BM key="13" val="1"/>
+	<BM key="14" val="1"/>
+	<BM key="15" val="1"/>
+	<BM key="16" val="1"/>
+	<BM key="20" val="3"/>
+	<BM key="21" val="3"/>
+	<BM key="22" val="3"/>
+	<BM key="23" val="3"/>
+	<BM key="24" val="3"/>
+	<BM key="25" val="3"/>
+	<BM key="26" val="3"/>
+	<BM key="27" val="3"/>
+	<BM key="28" val="3"/>
+	<BM key="29" val="3"/>
+	<BM key="30" val="3"/>
+	<BM key="31" val="3"/>
+	<BM key="32" val="3"/>
+	<BM key="33" val="3"/>
+	<BM key="34" val="3"/>
+	<BM key="35" val="3"/>
+	<BM key="36" val="3"/>
+	<BM key="37" val="3"/>
+	<BM key="38" val="3"/>
+	<BM key="39" val="3"/>
+	<BM key="40" val="3"/>
+	<BM key="41" val="3"/>
+	<BM key="42" val="3"/>
+	<BM key="43" val="3"/>
+	<BM key="44" val="3"/>
+	<BM key="45" val="3"/>
+	<BM key="50" val="5"/>
+	<BM key="51" val="5"/>
+	<BM key="52" val="5"/>
+	<BM key="53" val="5"/>
+	<BM key="54" val="5"/>
+	<BM key="55" val="5"/>
+	<BM key="56" val="5"/>
+	<BM key="57" val="5"/>
+	<BM key="58" val="5"/>
+	<BM key="59" val="5"/>
+	<BM key="60" val="5"/>
+	<BM key="61" val="5"/>
+	<BM key="62" val="5"/>
+	<BM key="63" val="5"/>
+	<BM key="64" val="5"/>
+	<BM key="65" val="5"/>
+	<BM key="66" val="5"/>
+	<BM key="67" val="5"/>
+	<BM key="68" val="5"/>
+	<BM key="69" val="5"/>
+	<BM key="70" val="6"/>
+	<BM key="70" val="6"/>
+	<BM key="71" val="6"/>
+	<BM key="72" val="6"/>
+	<BM key="73" val="6"/>
+	<BM key="74" val="6"/>
+	<BM key="75" val="6"/>
+	<BM key="76" val="6"/>
+	<BM key="80" val="7"/>
+	<BM key="81" val="7"/>
+	<BM key="82" val="7"/>
+	<BM key="83" val="7"/>
+	<BM key="84" val="7"/>
+	<BM key="85" val="7"/>
+	<BM key="86" val="7"/>
+	<BM key="87" val="7"/>
+	<BM key="88" val="7"/>
+	<BM key="89" val="7"/>
+	<BM key="90" val="7"/>
+	<BM key="91" val="7"/>
+	<BM key="92" val="7"/>
+	<BM key="92" val="7"/>
+	<BM key="93" val="7"/>
+	<BM key="94" val="7"/>
+	<BM key="95" val="7"/>
+	<BM key="96" val="7"/>
+	<BM key="97" val="7"/>
+	<BM key="98" val="7"/>
+	<BM key="99" val="7"/>
+	<BM key="100" val="7" />
+	<BM key="101" val="7" />
+	<BM key="102" val="7" />
+	<BM key="103" val="7" />
+	<BM key="104" val="7" />
+	<BM key="105" val="7" />
+	<BM key="106" val="7" />
+	<BM key="107" val="7" />
+	<BM key="108" val="7" />
+	<BM key="109" val="7" />
+	<BM key="110" val="7" />
+	<BM key="111" val="7" />
+	<BM key="112" val="7" />
+	<BM key="113" val="7" />
+	<BM key="114" val="7" />
+	<BM key="115" val="7" />
+	<BM key="116" val="7" />
+	<BM key="117" val="7" />
+	<BM key="118" val="7" />
+	<BM key="120" val="8" />
+	<BM key="121" val="8" />
+	<BM key="122" val="8" />
+	<BM key="123" val="8" />
+	<BM key="124" val="8" />
+	<BM key="125" val="8" />
+	<BM key="126" val="8" />
+	<BM key="127" val="8" />
+	<BM key="128" val="8" />
+	<BM key="129" val="8" />
+	<BM key="130" val="8" />
+	<BM key="131" val="8" />
+	<BM key="132" val="8" />
+	<BM key="133" val="8" />
+	<BM key="134" val="8" />
+	<BM key="135" val="8" />
+	<BM key="136" val="8" />
+	<BM key="137" val="8" />
+	<BM key="140" val="9" />
+	<BM key="141" val="9" />
+	<BM key="142" val="9" />
+	<BM key="143" val="9" />
+	<BM key="144" val="9" />
+	<BM key="145" val="9" />
+	<BM key="150" val="10" />
+	<BM key="150" val="10" />
+	<BM key="151" val="10" />
+	<BM key="152" val="10" />
+	<BM key="153" val="10" />
+	<BM key="154" val="10" />
+	<BM key="155" val="10" />
+	<BM key="156" val="10" />
+	<BM key="157" val="10" />
+	<BM key="158" val="10" />
+	<BM key="159" val="10" />
+	<BM key="160" val="10" />
+	<BM key="161" val="10" />
+	<BM key="170" val="2" />
+	<BM key="171" val="2" />
+	<BM key="172" val="2" />
+	<BM key="173" val="2" />
+	<BM key="174" val="2" />
+	<BM key="175" val="2" />
+	<BM key="176" val="2" />
+	<BM key="177" val="2" />
+	<BM key="178" val="2" />
+	<BM key="179" val="2" />
+	<BM key="180" val="2" />
+	<BM key="181" val="2" />
+	<BM key="182" val="2" />
+	<BM key="183" val="2" />
+	<BM key="184" val="2" />
+	<BM key="185" val="2" />
+	<BM key="186" val="2" />
+	<BM key="187" val="2" />
+	<BM key="188" val="2" />
+	<BM key="189" val="2" />
+	<BM key="190" val="2" />
+	<BM key="191" val="2" />
+	<BM key="192" val="2" />
+	<BM key="193" val="2" />
+	<BM key="194" val="2" />
+	<BM key="195" val="2" />
+	<BM key="196" val="2" />
+	<BM key="197" val="2" />
+	<BM key="198" val="2" />
+	<BM key="199" val="2" />
+	<BM key="200" val="2" />
+	<BM key="201" val="2" />
+	<BM key="202" val="2" />
+	<BM key="203" val="2" />
+	<BM key="204" val="2" />
+	<BM key="205" val="2" />
+	<BM key="206" val="2" />
+	<BM key="207" val="2" />
+	<BM key="208" val="2" />
+	<BM key="209" val="2" />
+	<BM key="210" val="2" />
+	<BM key="211" val="2" />
+	<BM key="212" val="2" />
+	<BM key="213" val="2" />
+	<BM key="214" val="2" />
+	<BM key="215" val="2" />
+	<BM key="216" val="2" />
+	<BM key="217" val="2" />
+	<BM key="218" val="2" />
+	<BM key="219" val="4" />
+	<BM key="220" val="4" />
+	<BM key="221" val="4" />
+	<BM key="222" val="4" />
+</TransBM>
