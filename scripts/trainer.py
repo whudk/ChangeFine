@@ -23,7 +23,7 @@ from lib.loss.loss_manager import LossManager
 from lib.vis.seg_visualizer import SegVisualizer
 from dataset.data_loader import DataLoader
 from scripts.tools.optim_scheduler import OptimScheduler
-
+#from scripts.vision_transformer import vit_base
 
 from scripts.tools.module_runner import ModuleRunner
 from scripts.tools.evaluator import get_evaluator
@@ -81,12 +81,12 @@ class Trainer(object):
         from xml.dom.minidom import parse
         dom_tree = parse(xml_data)
 
-
+        # 获取所有的 <type> 元素
         type_elements = dom_tree.getElementsByTagName('type')
         types = []
-
+        # 遍历每个 <type> 元素，并打印其文本内容
         for type_element in type_elements:
-
+            # 获取元素的文本内容，并去除两端的空白字符
             types.append(type_element.firstChild.data.strip())
         return types
 

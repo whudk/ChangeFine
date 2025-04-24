@@ -199,6 +199,22 @@ class ModuleRunner(object):
             msg = model.load_state_dict(state_dict, strict=False)
             print('Pretrained weights found at {} and loaded with msg: {}'.format(pretrained_weights, msg))
         return
+
+    def load_partial_state_dict(self, model, loaded_state_dict):
+        model_state = model.state_dict()
+        matched_state = {}
+
+        for k, v in loaded_state_dict.items():
+            if k in model_state:
+                if v.shape == model_state[k].shape:
+                    matched_state[k] = v
+                else:
+                    print(f"Shape mismatch for {k}: {v.shape} vs {model_state[k].shape}, skipped.")
+            else:
+                print(f"Key {k} not in current model, skipped.")
+
+        model_state.update(matched_state)
+        model.load_state_dict(model_state)
     def load_net(self, net,net_path=None):
         #self.to_device(net)
         import torch.distributed as dist
@@ -217,29 +233,32 @@ class ModuleRunner(object):
         net_dict = net.state_dict()
 
         net_path = self.configer.get("network","resume")
-        if os.path.isfile(net_path):
-            Log.info('Loading checkpoint from {}...'.format(net_path))
-            #resume_dict = torch.load(net_path,map_location=torch.device('cpu'))
+        if net_path is not None:
+            if os.path.isfile(net_path):
+                Log.info('Loading checkpoint from {}...'.format(net_path))
+                #resume_dict = torch.load(net_path,map_location=torch.device('cpu'))
 
-            resume_dict = torch.load(net_path, map_location=torch.device('cpu'))
-            state_dict = resume_dict['state_dict']
+                resume_dict = torch.load(net_path, map_location=torch.device('cpu'))
+                state_dict = resume_dict['state_dict']
 
 
-            if not list(state_dict.keys())[0].startswith('module.'):
-                new_state_dict = OrderedDict()
-                for k, v in state_dict.items():
-                    new_state_dict['module.' + k] = v
-                state_dict = new_state_dict
+                if not list(state_dict.keys())[0].startswith('module.'):
+                    new_state_dict = OrderedDict()
+                    for k, v in state_dict.items():
+                        new_state_dict['module.' + k] = v
+                    state_dict = new_state_dict
 
-            # 加载模型权重
-            net.load_state_dict(state_dict, strict=False)
 
-            if 'config_dict' in resume_dict:
-                self.configer.update(['performance'], resume_dict['config_dict'].get('max_performance'))
-                if 'max_accuracy' in resume_dict['config_dict'].keys():
-                    self.configer.update(['accuracy'], resume_dict['config_dict'].get('max_accuracy'))
-                #if self.configer.get('network', 'resume_continue'):
-                #self.configer.resume(resume_dict['config_dict'])
+                self.load_partial_state_dict(net,state_dict)
+                # 加载模型权重
+                #net.load_state_dict(state_dict, strict=False)
+
+                if 'config_dict' in resume_dict:
+                    self.configer.update(['performance'], resume_dict['config_dict'].get('max_performance'))
+                    if 'max_accuracy' in resume_dict['config_dict'].keys():
+                        self.configer.update(['accuracy'], resume_dict['config_dict'].get('max_accuracy'))
+                    #if self.configer.get('network', 'resume_continue'):
+                    #self.configer.resume(resume_dict['config_dict'])
         return net
 
     @staticmethod

@@ -215,9 +215,9 @@ if __name__ == '__main__':
 
     #split_dataset(args.output_json, train_ratio=args.train_ratio, val_ratio=args.val_ratio, test_ratio=args.test_ratio)
 
-    pretifs = glob.glob(os.path.join(dir, "A\*.png"))
-    curtifs = glob.glob(os.path.join(dir, "B\*.png"))
-    lbltifs = glob.glob(os.path.join(dir, "label\*.png"))
+    pretifs = glob.glob(os.path.join(args.dir, "A\*.png"))
+    curtifs = glob.glob(os.path.join(args.dir, "B\*.png"))
+    lbltifs = glob.glob(os.path.join(args.dir, "label\*.png"))
 
 
 
