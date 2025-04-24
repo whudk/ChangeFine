@@ -1,0 +1,256 @@
+{
+  "dataset": "",
+  "method": "changefine",
+  "task":"cd",
+  "config":
+  {
+    "transxml": ""
+  },
+  "data": {
+    "image_tool": "cv2",
+    "input_mode": "BGR",
+    "num_classes": 2,
+    "classnames": "config/builddings.xml",
+    "data_dir": "",
+    "check_path": false,
+    "workers": 0,
+    "input_size": 256
+  },
+  "train": {
+    "batch_size": 12,
+    "use_amp": true,
+    "loader": "sam_clip_cd",
+    "exchange": 0.5,
+    "mode":"cd",
+    "warm_up_epoch": 0,
+    "epoch":100,
+    "fp16": true,
+    "unsupervised":{
+      "drop_percent":80
+    },
+    "data_transformer": {
+      "size_mode": "fix_size",
+      "input_size": [256, 256],
+      "align_method": "scale_and_pad",
+      "pad_mode": "random"
+    }
+  },
+  "val": {
+    "batch_size": 12,
+    "mode": "ms_test",
+    "loader": "sam_clip_cd",
+
+    "data_transformer": {
+      "size_mode": "max_size",
+      "align_method": "only_pad",
+      "pad_mode": "pad_right_down",
+      "input_size": [256, 256]
+    }
+  },
+  "test": {
+    "batch_size": 2,
+    "mode": "ss_test",
+    "method": "base_cd",
+    "data_transformer": {
+      "size_mode": "diverse_size",
+      "align_method": "only_pad",
+      "pad_mode": "pad_right_down"
+    },
+    "bin_thr": 125
+  },
+  "train_trans": {
+    "aug_mode":"cutmix",
+    "trans_seq": ["random_crop","random_hflip","random_resize","resize","random_saturation"],
+    "trans_image": ["oldimg","newimg"],
+    "random_brightness": {
+      "ratio": 0.5,
+      "shift_value": 10
+    },
+    "random_stretch": {
+      "method":"random",
+      "ratio": 0.5,
+      "percent_range": [0.0, 2.0],
+      "standrand_range":[0.5,1.5]
+
+    },
+    "random_saturation": {
+      "lower": 0.5,
+      "upper": 1.5,
+      "saturation_ratio": 0.5
+
+    },
+    "random_contrast": {
+      "lower": 0.9,
+      "upper": 1.2,
+      "ratio": 0.5
+    },
+    "resize": {
+      "target_size": [256,256]
+    },
+    "random_hflip": {
+      "ratio": 0.5,
+      "swap_pair": []
+    },
+    "random_resize": {
+      "ratio": 0.5,
+      "method": "random",
+      "scale_range": [0.75, 1.25],
+      "aspect_range": [0.9, 1.1]
+    },
+    "random_rotate": {
+      "ratio": 0.5,
+      "rotate_degree": 10
+    },
+    "random_crop":{
+      "ratio": 0.5,
+      "crop_size": [256, 256],
+      "method": "random",
+      "allow_outside_center": false
+    }
+
+  },
+  "val_trans": {
+    "trans_seq": ["random_crop"],
+    "trans_image": ["oldimg","newimg"],
+    "resize": {
+      "min_side_length": 256
+    },
+    "random_crop": {
+      "ratio": 1.0,
+      "crop_size": [256, 256],
+      "method": "random",
+      "allow_outside_center": false
+    }
+  },
+  "normalize": {
+    "mean_value":[0.39191337, 0.39612953, 0.3787319 ],
+    "left": {
+      "div_value": 255.0,
+      "mean_value":   [0.39191337, 0.39612953, 0.3787319 ],
+      "mean": [0.39191337, 0.39612953, 0.3787319 ],
+      "std": [0.15241217, 0.14040908, 0.13289473]
+    },
+    "right": {
+      "div_value": 255.0,
+      "mean_value":   [0.39191337, 0.39612953, 0.3787319 ],
+      "mean": [0.39191337, 0.39612953, 0.3787319 ],
+      "std": [0.15241217, 0.14040908, 0.13289473]
+    }
+  },
+  "checkpoints": {
+    "checkpoints_root": "./checkpoints",
+    "checkpoints_name": "dsfin",
+    "checkpoints_dir": "changefine",
+    "save_iters": 500
+  },
+  "network":{
+    "bn_type": "torchbn",
+    "prompt": "",
+    "clip": {
+      "name":"ViT-B/16"
+    },
+    "neck":
+    {
+      "params": {
+         "use_pyrid":false,
+         "feats_exchange": "CCMAT",
+         "feats_fusion": "TBAM",
+         "encoder_dim":768,
+         "n_cross_head":16,
+         "n_cross_layer":1,
+         "proj_drop": 0.0,
+         "attn_drop": 0.0
+      },
+      "fusion":
+      {
+        "name":"uper_head",
+        "fusion":"cross",
+        "params":{
+          "num_class":2,
+          "pool_scales":[1, 2, 3, 6],
+          "fc_dim":512,
+          "fpn_inplanes":[512, 512, 514, 512],
+          "fpn_dim":512,
+          "embed_dim": 512,
+          "out_dim": 8192
+        }
+      }
+    },
+
+    "loss_weights": {
+      "aux_loss": 0.4,
+      "seg_loss": 1.0
+    }
+  },
+  "logging": {
+    "logfile_level": "info",
+    "stdout_level": "info",
+    "log_file": "./log/rsdata/dsifn.log",
+    "log_format": "%(asctime)s %(levelname)-7s %(message)s",
+    "rewrite": true,
+    "tb_logger": "tb_logger",
+    "tb_name": "dsifn"
+  },
+  "lr": {
+    "base_lr": 0.001,
+    "metric": "iters",
+    "lr_policy": "lambda_poly",
+    "warm": {
+      "warm_iters": 0,
+      "freeze_backbone": false
+    },
+    "step": {
+      "gamma": 0.5,
+      "step_size": 100
+    }
+  },
+  "solver": {
+    "display_iter": 10,
+    "test_interval": 500,
+    "max_iters": 500000
+  },
+  "optim": {
+    "optim_method": "adamw",
+    "adamw": {
+      "betas": [0.9, 0.999],
+      "eps": 1e-06,
+      "weight_decay": 0.0001
+    },
+    "sgd":{
+      "weight_decay": 0.0001,
+      "momentum": 0.9,
+      "nesterov": false
+    }
+  },
+  "loss": {
+    "loss_type": "contrast_loss",
+    "patch_algin": true,
+    "pixel_algin": false,
+    "ce_loss": true,
+    "params": {
+      "ce_reduction": "mean",
+      "ce_ignore_index": -1,
+      "ohem_minkeep":100000,
+      "ohem_thresh": 0.7,
+      "loss_weight": 0.7
+    },
+    "celoss_weight": 0.7
+  },
+  "COOP":
+  {
+    "N_CTX": 4,
+    "CTX_INIT": "",
+    "input_size": 224,
+    "CLASS_TOKEN_POSITION": "end",
+    "CSC": false
+  },
+  "contrast": {
+    "use":  true,
+    "wram_up_iters": 0,
+    "class_flags": [0, 1],
+    "temperature": 0.007,
+    "base_temperature": 0.001,
+    "max_samples": 1024,
+    "max_views": 100
+  }
+}

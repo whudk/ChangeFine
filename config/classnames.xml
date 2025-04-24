@@ -1,0 +1,30 @@
+<?xml version='1.0' encoding='utf-8'?>
+<classes>
+    <type> unknown </type>
+    <type> push-fill</type>
+    <type> Buildings</type>
+    <type> Grassland</type>
+    <type> Hardened surface</type>
+    <type> Forest land</type>
+    <type> roads</type>
+    <type> Cultivated land</type>
+    <type> others</type>
+    <type> Facility agricultural land</type>
+    <type> Pond water surface</type>
+    <type> Structures</type>
+    <type> House construction sites</type>
+    <type> Water areas</type>
+    <type> Open-air sports fields</type>
+    <type> Open-air storage yards</type>
+    <type> Unused land</type>
+    <type> Hydraulic structures</type>
+    <type> Road construction sites</type>
+    <type> Demolition sites</type>
+    <type> Open-air parking lots</type>
+    <type> Photovoltaic panels</type>
+    <type> Mining land</type>
+    <type> Industrial facilities</type>
+    <type> Orchard</type>
+    <type> Solidification ponds</type>
+    <type> Backfilling soil enclosed sea</type>
+</classes>
