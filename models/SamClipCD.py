@@ -16,7 +16,7 @@ _tokenizer = _Tokenizer()
 from models.attention import Cross_Modal_Attention
 
 from Inference.hdrpylc.hdrpylc import checkLib
-from models.decoder.transformer_decoder import MaskDecoder,TwoWayTransformer,MultiMaskDecoder
+from models.decoder.transformer_decoder import MaskDecoder,TwoWayTransformer,MultiMaskDecoder,ChangeDecoder
 from  models.attention import Mlp
 
 
@@ -350,7 +350,6 @@ class ChangeFine(nn.Module):
                  decoder_width = 512,
                  n_pts = 5000,
                  n_layer = 6,
-                 out_indices = [3,5,7,11],
                  **kwargs):
         super().__init__()
         self.dtype = clip_model.dtype
@@ -360,14 +359,12 @@ class ChangeFine(nn.Module):
         for param in self.parameters():
             param.requires_grad = False
 
-
-        self.num_scale = len(out_indices)
         self.pe_encoder = PositionEmbeddingRandom(decoder_width // 2)
         self.out_cls = configer.get("data", "num_classes")
         self.len_classes = len(class_names)
         self.width = width
         self.clip_image_encoder = CLIPVisionTransformer(input_resolution=configer.get("data", "input_size"),
-                                                        pretrained=clip_model, patch_size=16, get_embeddings=True, out_indices=out_indices)
+                                                        pretrained=clip_model, patch_size=16, get_embeddings=True)
         self.prompt_learner = PromptLearner(configer, class_names, clip_model)
 
 
@@ -413,7 +410,7 @@ class ChangeFine(nn.Module):
                                           attn_drop=attn_drop, feats_fusion=feats_fusion,
                                           feats_exchange=feats_exchange)
 
-                    for i in range(self.num_scale)
+                    for i in range(4)
             ]
         )
 
@@ -435,7 +432,7 @@ class ChangeFine(nn.Module):
             self.MoE = True
         else:
             self.embed_feats = nn.Sequential(
-                nn.Conv2d(width * self.num_scale, decoder_width, kernel_size=3, stride=1, padding=1),
+                nn.Conv2d(width * 4, decoder_width, kernel_size=3, stride=1, padding=1),
                 nn.BatchNorm2d(decoder_width),
                 nn.LeakyReLU(0.01),
                 nn.Conv2d(decoder_width, decoder_width, kernel_size=3, stride=1, padding=1),
@@ -590,9 +587,6 @@ class ChangeFine(nn.Module):
 
     def forward(self, x1, x2, targets = None,batched_input = None, multimask_output = False, with_amp = False ):
         #encoder text
-
-
-
         prompts = self.prompt_learner()
         tokenized_prompts = self.prompt_learner.tokenized_prompts #K x C
 
@@ -652,7 +646,7 @@ class ChangeFine(nn.Module):
             coarse_up = F.interpolate(coarse_pred, size=final_pred.shape[2:], mode='bilinear', align_corners=False)
             final_pred = self.alpha * final_pred + (1 - self.alpha) * coarse_up
         else:
-            for i in range(5):
+            for i in range(3):
                 dense_prompt = F.interpolate(dense_prompt, size=dense_embed.shape[2:], mode='bilinear', align_corners=False)
                 final_pred = self.decoder([dense_embed], dense_prompt, dense_pe, sparse_prompt, multimask_output=True)
                 coarse_up = F.interpolate(coarse_pred, size=final_pred.shape[2:], mode='bilinear', align_corners=False)

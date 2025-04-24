@@ -95,6 +95,7 @@ class UperHead(nn.Module):
 
 
     def build_pyramid_features(self, x):
+
         if isinstance(x, tuple) or isinstance(x, list):
             b, hw, dim = x[0].size()
             #
@@ -232,6 +233,9 @@ class UperHead(nn.Module):
         fpn_feature_list.reverse() # [P2 - P5]
         output_size = fpn_feature_list[0].size()[2:]
         fusion_list = [fpn_feature_list[0]]
+
+
+
         for i in range(1, len(fpn_feature_list)):
             fusion_list.append(nn.functional.interpolate(
                 fpn_feature_list[i],

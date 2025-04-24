@@ -761,7 +761,7 @@ class CLIPVisionTransformer(nn.Module):
         embed_dim = width
 
         self.use_fpn = use_fpn
-        if patch_size == 16:
+        if patch_size == 16 and use_fpn:
             self.fpn1 = nn.Sequential(
                 nn.GroupNorm(1, embed_dim),
                 nn.ConvTranspose2d(embed_dim, embed_dim, kernel_size=2, stride=2),

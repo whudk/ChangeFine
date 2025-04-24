@@ -251,6 +251,7 @@ class Attention(nn.Module):
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
 
+
     def forward(self, x):
         B, N, C = x.shape
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
@@ -590,11 +591,11 @@ class CrossAttention(nn.Module):
         attn2 = self.attn_drop(attn2)
 
 
-        x1 = (attn1 @ v1).transpose(1, 2).reshape(B, N, C)
+        x1 = (attn1 @ v2).transpose(1, 2).reshape(B, N, C)
         x1 = self.proj(x1)
         x1 = self.proj_drop(x1)
 
-        x2 = (attn2 @ v2).transpose(1, 2).reshape(B, N, C)
+        x2 = (attn2 @ v1).transpose(1, 2).reshape(B, N, C)
         x2 = self.proj(x2)
         x2 = self.proj_drop(x2)
 
@@ -669,31 +670,29 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class NeighborhoodSearch(nn.Module):
-    def __init__(self, embed_dim=768, num_heads=8, H=14, W=14, window_size=1):
+    def __init__(self, embed_dim=768, num_heads=8, window_size=1):
         super().__init__()
         self.embed_dim = embed_dim
         self.num_heads = num_heads
-        self.H = H
-        self.W = W
         self.window_size = window_size
-        #self.attn = nn.MultiheadAttention(embed_dim, num_heads, batch_first=True)
+        self.attn = nn.MultiheadAttention(embed_dim, num_heads, batch_first=True)
 
         # 预计算邻域索引（直接存储为张量）
-        self.neighbor_indices = self._precompute_neighbors()
+        # self.neighbor_indices = self._precompute_neighbors()
         self.neighbor_norm = nn.LayerNorm(embed_dim)
-    def _precompute_neighbors(self):
+    def _precompute_neighbors(self, H, W):
         """
         预计算所有像素的邻域索引，并存储为张量格式
         """
         neighbors_list = []
-        for idx in range(self.H * self.W):
-            row, col = idx // self.W, idx % self.W
+        for idx in range(H * W):
+            row, col = idx // W, idx % W
             neighbors = []
             for i in range(-self.window_size, self.window_size + 1):
                 for j in range(-self.window_size, self.window_size + 1):
                     r, c = row + i, col + j
-                    if 0 <= r < self.H and 0 <= c < self.W:
-                        neighbors.append(r * self.W + c)
+                    if 0 <= r < H and 0 <= c < W:
+                        neighbors.append(r * W + c)
             neighbors_list.append(neighbors)
 
         # 转为 PyTorch Tensor，确保索引并行计算
@@ -707,9 +706,10 @@ class NeighborhoodSearch(nn.Module):
         """
         B, N, D = x1.shape
         device = x1.device
-
+        H =  W = int(math.sqrt(N))
+        neighbor_indices = self._precompute_neighbors(H,W)
         # 获取邻域索引（加速）
-        neighbors_idx = self.neighbor_indices.to(device)  # [N, max_neighbors]
+        neighbors_idx = neighbor_indices.to(device)  # [N, max_neighbors]
 
         # 直接索引所有邻域特征 (批量化)
         neighbor_feats = x2[:, neighbors_idx, :]  # [B, N, max_neighbors, D]
@@ -724,74 +724,12 @@ class NeighborhoodSearch(nn.Module):
         x2_fused = (neighbor_feats * attn_weights).sum(dim=2)  # [B, N, D]
         x2_fused = self.neighbor_norm(x2_fused)
         # 标准 Cross-Attention (x1 as Query, x2_fused as Key, Value)
-        #attn_output, attn_map = self.attn(query=x2_fused, key=x1, value=x1)  # [B,N,D]   查询相似 attn_output
+        attn_output, attn_map = self.attn(query=x2_fused, key=x1, value=x1)  # [B,N,D]   查询相似 attn_output
 
-        return x1, x2_fused
+        return attn_output
 
 
-# class NeighborhoodCrossAttention(nn.Module):
-#     def __init__(self, embed_dim=768, num_heads=8, H=14, W=14, window_size=1):
-#         super().__init__()
-#         self.embed_dim = embed_dim
-#         self.num_heads = num_heads
-#         self.H = H
-#         self.W = W
-#         self.window_size = window_size
-#         self.attn = nn.MultiheadAttention(embed_dim, num_heads, batch_first=True)
-#
-#         self.neighbor_indices = self._precompute_neighbors()
-#
-#     def _precompute_neighbors(self):
-#         """
-#         预计算所有像素的邻域索引
-#         """
-#         neighbors_dict = {}
-#         for idx in range(self.H * self.W):
-#             row, col = idx // self.W, idx % self.W
-#             neighbors = []
-#             for i in range(-self.window_size, self.window_size + 1):
-#                 for j in range(-self.window_size, self.window_size + 1):
-#                     r, c = row + i, col + j
-#                     if 0 <= r < self.H and 0 <= c < self.W:
-#                         neighbors.append(r * self.W + c)
-#             neighbors_dict[idx] = neighbors
-#         return neighbors_dict
-#
-#     def get_neighbors(self, idx):
-#         """
-#         直接查找预计算的邻域索引
-#         """
-#         return self.neighbor_indices.get(idx, [])
-#     def forward(self, x1, x2):
-#         B, N, D = x1.shape
-#         assert N == self.H * self.W, "Dimension mismatch!"
-#
-#         device = x1.device
-#         x2_fused = torch.zeros_like(x2)
-#
-#         # 邻域融合 + 同一位置Patch特征增强
-#         for idx in range(N):
-#             neighbors_idx = self.get_neighbors(idx)
-#             neighbor_feats = x2[:, neighbors_idx, :]  # [B, num_neighbors, D]
-#
-#             # 获取当前Patch特征 (同位置)
-#             center_feat = x2[:, idx, :].unsqueeze(1)  # [B,1,D]
-#
-#             # 结合邻域特征和同一位置特征
-#             combined_feats = torch.cat([center_feat, neighbor_feats], dim=1)  # [B, num_neighbors+1, D]
-#
-#             # Attention 聚合 (Self-attention in local neighborhood)
-#             attn_weights = F.softmax(torch.einsum('bnd,bkd->bkn', center_feat, combined_feats) / (D ** 0.5), dim=-1)  # [B,num_neighbors+1]
-#
-#             # 加权融合
-#             fused_feat = (combined_feats * attn_weights).sum(dim=1)  # [B,D]
-#
-#             x2_fused[:, idx, :] = fused_feat  # 更新邻域增强特征
-#
-#         # 标准 Cross-Attention (x1 as Query, x2_fused as Key, Value)
-#         attn_output, attn_map = self.attn(query=x1, key=x2_fused, value=x2_fused)  # [B,N,D]
-#
-#         return attn_output
+
 
 
 
@@ -838,10 +776,224 @@ class CrossModalityEncoder(nn.Module):
         x2 = x2 + self.drop_path(self.mlp2(self.norm2(x2)))
 
         return x1,x2
+class MoEFeatureFusion_v0(nn.Module):
+    def __init__(self, embed_dim, hidden_dim=64, drop = 0.):
+        super().__init__()
+        # gate: 用于为每个“专家”计算权重（softmax over 4）
+        self.gate = nn.Sequential(
+            nn.Linear(embed_dim * 4, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, 4)  # 4个专家
+        )
+        # 输出 projection（可选）
+        self.out_proj = nn.Linear(embed_dim, embed_dim)
+
+        self.minus_proj = nn.Sequential(
+            nn.Linear(embed_dim, embed_dim),
+            nn.ReLU(),
+            nn.Dropout(drop)
+        )
+        self.diff_proj = nn.Sequential(
+            nn.Linear(embed_dim, embed_dim),
+            nn.ReLU(),
+            nn.Dropout(drop)
+        )
+    # def forward(self, x1, x2):
+    #     x_minus = x1 - x2 #关注变化趋势
+    #     x_diff = torch.abs(x1 - x2) #关注变化强度
+    #
+    #     # 拼接后用于 gating
+    #     x_concat = torch.cat([x1, x2, x_minus, x_diff], dim=-1)  # [B, N, 4C]
+    #     gate_logits = self.gate(x_concat)  # [B, N, 4]
+    #     gate_weights = F.softmax(gate_logits, dim=-1)  # [B, N, 4]
+    #
+    #     # 组合专家
+    #     experts = torch.stack([x1, x2, x_minus, x_diff], dim=-2)  # [B, N, 4, C]
+    #     fused = torch.sum(gate_weights.unsqueeze(-1) * experts, dim=-2)  # [B, N, C]
+    #
+    #     return self.out_proj(fused)
+    def forward(self, x1, x2):
+        # 基本差异特征
+        x_minus = self.minus_proj(x1 - x2)
+        x_diff =  self.diff_proj(torch.abs(x_minus))
+
+        # 变化注意力：关注变化显著区域
+        sim = F.cosine_similarity(x1, x2, dim=-1)  # [B, N]
+        diff_attn = torch.sigmoid(1 - sim).unsqueeze(-1)  #
+
+
+        # x1_w =  x1 +  x1 * diff_attn
+        # x2_w =  x2 +  x2 * diff_attn
+        x1_w = x1 * diff_attn
+        x2_w = x2 * diff_attn
+
+        # 拼接作为 gating 输入
+        x_concat = torch.cat([x1_w, x2_w, x_minus, x_diff], dim=-1)  # [B, N, 4C]
+
+        # Gating 权重
+        gate_logits = self.gate(x_concat)  # [B, N, 4]
+        gate_weights = F.softmax(gate_logits, dim=-1)  # [B, N, 4]
+
+        # Expert 特征集合
+        experts = torch.stack([x1_w, x2_w, x_minus, x_diff], dim=-2)  # [B, N, 4, C]
+
+        # 加权融合
+        fused = torch.sum(gate_weights.unsqueeze(-1) * experts, dim=-2)  # [B, N, C]
+
+        return self.out_proj(fused)  # [B, N, C]
+#
+
+class MoEFeatureFusion(nn.Module):
+    def __init__(self, embed_dim, hidden_dim=64, drop=0.):
+        super().__init__()
+
+
+        self.minus_proj_conv = nn.Sequential(
+            nn.Conv2d(embed_dim, embed_dim, kernel_size=3, padding=1),
+            nn.BatchNorm2d(embed_dim),
+            nn.ReLU(inplace=True),
+            nn.Dropout2d(drop)
+        )
+        # self.abs_proj_conv = nn.Sequential(
+        #     nn.Conv2d(embed_dim, embed_dim, kernel_size=3, padding=1),
+        #     nn.BatchNorm2d(embed_dim),
+        #     nn.ReLU(inplace=True),
+        #     nn.Dropout2d(drop)
+        # )
+
+        self.gate = nn.Sequential(
+            nn.Linear(embed_dim * 4, hidden_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(hidden_dim, 4)
+        )
+
+
+
+        # 输出映射
+        self.out_proj = Mlp(in_features=embed_dim,hidden_features=4 * embed_dim, out_features=embed_dim,drop=drop)
+
+
+    def forward(self, x1, x2):
+        """
+        x1, x2: [B, N, C]
+        return: [B, N, C]
+        """
+        B, N, C = x1.shape
+        H = W = int(N ** 0.5)
+        assert H * W == N, f"N={N} must be a square patch (H=W=√N), got H*W={H}*{W}"
+
+        # === Step 1: 提取结构感知差异特征 ===
+        x_minus = x1 - x2  # [B, N, C]
+        x_minus_2d = einops.rearrange(x_minus, 'b (h w) c -> b c h w', h=H)
+        x_minus_2d = self.minus_proj_conv(x_minus_2d)  # [B, C, H, W]
+
+        x_minus = einops.rearrange(x_minus_2d, 'b c h w -> b (h w) c')  # [B, N, C]
+
+        # === Step 2: 差异强度特征 ===
+        # x_diff = self.abs_proj_conv(torch.abs(x_minus_2d))  # [B, C, H, W]
+        # x_diff = einops.rearrange(x_diff, 'b c h w -> b (h w) c')  # [B, N, C]
+        x_diff = torch.abs(x_minus)  # [B, C, H, W]
+        # # === Step 3: 差异注意力引导 ===
+        sim = F.cosine_similarity(x1, x2, dim=-1).unsqueeze(-1)  # [B, N, 1]
+        diff_attn = torch.sigmoid(1 - sim)  # [B, N, 1]
+        # x1 = x1 - x1 *diff_attn
+        # x2 = x2 + x2 *diff_attn
+        # x1_w = x1 * (1 - diff_attn) # 弱化 x1
+        # x2_w = x2 * (1 + diff_attn)  # 强化 x2
+
+        # === Step 4: 拼接 gating 输入并融合 ===
+
+
+
+        x_concat = torch.cat([x1, x2, x_minus, x_diff], dim=-1)  # [B, N, 4C]
+        gate_logits = self.gate(x_concat)  # [B, N, 4]
+        gate_weights = F.softmax(gate_logits, dim=-1)
+
+        experts = torch.stack([x1, x2, x_minus, x_diff], dim=-2)  # [B, N, 4, C]
+        fused = torch.sum(gate_weights.unsqueeze(-1) * experts, dim=-2)  # [B, N, C]
+        fused = fused + fused * diff_attn
+        return self.out_proj(fused)  # [B, N, C]
+
+
+class MoEConvFusion4Experts(nn.Module):
+    def __init__(self, in_channels, out_dim, num_heads, use_norm=True, qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.):
+        super().__init__()
+        self.in_channels = in_channels  # C
+        self.use_norm = use_norm
+
+        # Normalization layers (LayerNorm)
+        self.norm = nn.LayerNorm(in_channels) if use_norm else nn.Identity()
+
+        # Gating network
+        self.gate = nn.Sequential(
+            nn.Linear(in_channels * 4, out_dim),
+            nn.ReLU(),
+            nn.Linear(out_dim, 4)  # 4 experts
+        )
+
+        # Attention and Channel Attention
+        self.attn = Attention(in_channels, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale,
+                              attn_drop=attn_drop)
+        self.ch_attn = ChannelsAttention(in_channels, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale,
+                                         attn_drop=attn_drop)
+
+        # MLP for output projection
+        self.out_proj = Mlp(in_features=in_channels, hidden_features=4 * in_channels, out_features=out_dim,
+                            drop=drop)
+
+        # Dropout and Drop path layers for better regularization
+        self.drop_path = nn.Dropout(drop) if drop > 0 else nn.Identity()
+
+    def forward(self, x):
+        assert isinstance(x, (list, tuple)) and len(x) == 4
+
+        # Split the input into 4 experts: [B, C, H, W]
+        x1, x2, x3, x4 = x
+        B, C, H, W = x1.shape
+
+        # Rearrange each expert to [B, N, C]
+        x1 = einops.rearrange(x1, 'b c h w -> b (h w) c')
+        x2 = einops.rearrange(x2, 'b c h w -> b (h w) c')
+        x3 = einops.rearrange(x3, 'b c h w -> b (h w) c')
+        x4 = einops.rearrange(x4, 'b c h w -> b (h w) c')
+
+        # Apply normalization on each expert
+        x1, x2, x3, x4 = map(self.norm, (x1, x2, x3, x4))
+
+        # Gate input: [B, N, 4C]
+        gate_input = torch.cat([x1, x2, x3, x4], dim=-1)
+        gate_weight = F.softmax(self.gate(gate_input), dim=-1)  # [B, N, 4]
+
+        # MoE fusion: Apply gate weights to fuse the experts
+        experts = torch.stack([x1, x2, x3, x4], dim=-2)  # [B, N, 4, C]
+        fused = torch.sum(gate_weight.unsqueeze(-1) * experts, dim=-2)  # [B, N, C]
+
+        # Apply Channel Attention after fusion
+        fused, ch_attn = self.ch_attn(self.norm(fused))
+
+        # Apply Attention
+        fused, sp_attn = self.attn(self.norm(fused))
+
+        # Apply dropout path and MLP
+        fused = fused + self.drop_path(fused)
+        fused = fused + self.drop_path(self.out_proj(self.norm(fused)))
+
+        # Rearrange back to [B, C, H, W]
+        fused = einops.rearrange(fused, 'b (h w) c -> b c h w', h=H, w=W)
+
+        return fused
+
+
+
+
+
+
+
+
 
 
 class Cross_Modal_Attention(nn.Module):
-    def __init__(self,width,  dim, num_heads, window_size = 8,mlp_ratio=4.,depth= 1, qkv_bias=False, qk_scale=None, drop=0., attn_drop=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm,feats_fusion = "TBAM", feats_exchange = "CCMAT"):
+    def __init__(self,width,  dim, num_heads, window_size = 8,mlp_ratio=4.,depth= 1, qkv_bias=False, qk_scale=None, drop=0., attn_drop=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm, H = 16, W = 16, feats_fusion = "TBAM", feats_exchange = "CCMAT"):
         super(Cross_Modal_Attention,self).__init__()
 
         self.feats_exchange = feats_exchange
@@ -856,11 +1008,14 @@ class Cross_Modal_Attention(nn.Module):
         self.drop_path = nn.Identity()
         self.norm = nn.LayerNorm(dim)
         self.norm1 = nn.LayerNorm(dim)
+        self.norm2 = nn.LayerNorm(dim)
+        self.norm3= nn.LayerNorm(dim)
         self.norm_fuse = nn.LayerNorm(dim)
 
-        mlp_hidden_dim = int(dim * mlp_ratio)
+
         self.mlp = Mlp(in_features=dim,hidden_features=dim * 4 ,out_features = dim,act_layer=act_layer,drop = drop)
-        self.mlp2 = Mlp(in_features=dim * 4, hidden_features= dim * 4 ,out_features=dim,act_layer=act_layer,drop = drop)
+        #self.mlp1 = Mlp(in_features=dim, hidden_features=dim * 4, out_features=dim, act_layer=act_layer, drop=drop)
+
 
         self.init_attn(dim, num_heads,  window_size, depth,qkv_bias, qk_scale, drop, attn_drop)
 
@@ -869,6 +1024,8 @@ class Cross_Modal_Attention(nn.Module):
 
         self.feats_fusion = feats_fusion
         if self.feats_fusion == "TBAM":
+            self.mlp2 = Mlp(in_features=dim * 4, hidden_features=dim * 4, out_features=dim, act_layer=act_layer,
+                            drop=drop)
             self.attn = Attention(dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop)
             self.ch_attn = ChannelsAttention(dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale,
                                          attn_drop=attn_drop)
@@ -881,8 +1038,16 @@ class Cross_Modal_Attention(nn.Module):
             self.fusion = CrossAttention_Single(dim = dim,num_heads=24)
         elif self.feats_fusion == 'CBAM':
             self.fusion = CAM_PAM(dim = dim)
-        # elif self.feats_fusion == 'SCAM':
-        #     self.fusion = NeighborhoodSearch(embed_dim=dim, num_heads=8, H=16, W=16, window_size=1)
+        elif self.feats_fusion == 'SCAM':
+            self.fusion = NeighborhoodSearch(embed_dim=dim, num_heads=num_heads, window_size=1)
+            self.moe = MoEFeatureFusion(embed_dim=dim, hidden_dim=dim, drop=drop)
+            self.attn = Attention(dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop)
+            self.ch_attn = ChannelsAttention(dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale,
+                                             attn_drop=attn_drop)
+            ##self.attn = Attention(dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop)
+
+        elif self.feats_fusion == 'MoE':
+            self.fusion = MoEFeatureFusion(embed_dim=dim, hidden_dim=dim,drop=drop)
         else:
             raise Exception
 
@@ -899,6 +1064,7 @@ class Cross_Modal_Attention(nn.Module):
                     attn_drop=attn_drop, proj_drop=drop,feats_exchange = self.feats_exchange)
                 for _ in range(depth)
             ])
+           # self.blocks = None
 
 
 
@@ -931,6 +1097,8 @@ class Cross_Modal_Attention(nn.Module):
         #compute x_diff and x_minus  according x1 and x2
 
 
+
+
         if self.feats_fusion == 'TBAM':
 
             x_minus =  x1 - x2
@@ -957,9 +1125,16 @@ class Cross_Modal_Attention(nn.Module):
             x = self.mlp2(torch.cat((x1, x2), dim=-1))
             x = self.fusion(x)
             x = einops.rearrange(x,'b c h w -> b (h w) c')
-        # elif self.feats_fusion == 'SCAM':
-        #     x = self.fusion(x1, x2)
-            #x = x1 - x # 差分
+        elif self.feats_fusion == 'SCAM':
+            x_21 = self.fusion(x2, x1)
+            x2 = x2 + self.drop_path(x_21)
+            x2 = x2 + self.drop_path(self.mlp(self.norm_fuse(x2)))
+            x = self.moe(self.norm1(x1), self.norm1(x2))
+            #x = self.moe(x1, x2)
+            x, ch_attn = self.ch_attn(self.norm1(x))
+            y, attn = self.attn(self.norm2(x))
+            x = x + self.drop_path(y)
+            #x = x + self.drop_path(self.mlp1(self.norm3(x)))
 
         return  x #torch.cat((x,x_diff), dim = -1)
 

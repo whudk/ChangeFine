@@ -115,7 +115,8 @@ class TwoWayTransformer(nn.Module):
         self,
         image_embedding: Tensor,
         image_pe: Tensor,
-        point_embedding: Tensor,
+        text_embedding: Tensor,
+
     ) -> Tuple[Tensor, Tensor]:
         """
         Args:
@@ -123,8 +124,8 @@ class TwoWayTransformer(nn.Module):
             B x embedding_dim x h x w for any h and w.
           image_pe (torch.Tensor): the positional encoding to add to the image. Must
             have the same shape as image_embedding.
-          point_embedding (torch.Tensor): the embedding to add to the query points.
-            Must have shape B x N_points x embedding_dim for any N_points.
+          text_embedding (torch.Tensor): the embedding to add to the query points.
+            Must have shape B x N x embedding_dim for any N_points.
 
         Returns:
           torch.Tensor: the processed point_embedding
@@ -135,23 +136,30 @@ class TwoWayTransformer(nn.Module):
         image_embedding = image_embedding.flatten(2).permute(0, 2, 1)
         image_pe = image_pe.flatten(2).permute(0, 2, 1)
 
+
+
         # Prepare queries
-        queries = point_embedding
+        queries = text_embedding
         keys = image_embedding
 
-        # Apply transformer blocks and final layernorm
+        # # Apply transformer blocks and final layernorm
+        # for layer in self.layers:
+        #     queries, keys = layer(
+        #         queries=queries,
+        #         keys=keys,
+        #     )
+        #     # Apply transformer blocks and final layernorm
         for layer in self.layers:
             queries, keys = layer(
                 queries=queries,
                 keys=keys,
-                query_pe=point_embedding,
+                query_pe=text_embedding,
                 key_pe=image_pe,
             )
-
-        # Apply the final attention layer from the points to the image
-        q = queries + point_embedding
+        q = queries + text_embedding
         k = keys + image_pe
-        attn_out = self.final_attn_token_to_image(q=q, k=k, v=keys)
+        attn_out = self.final_attn_token_to_image(q=q, k=k,
+                                                  v=keys)  # 点和key的注意力 k:含有坐标的特征， v:不含坐标的特征  q:含有坐标的点特征    from points to image
         queries = queries + attn_out
         queries = self.norm_final_attn(queries)
 
@@ -323,39 +331,15 @@ def build_2d_sincos_position_embedding(h, w, embed_dim, temperature=10000.):
     pos = pos.permute(2, 0, 1).unsqueeze(0)  # [1, C, H, W]
 
     return pos  # 可以直接作为 image_pe 使用
-
-
-class MaskDecoderFPN(nn.Module):
-    def __init__(self, in_channels, out_channels):
-        super().__init__()
-        self.up1 = nn.Sequential(
-            nn.Conv2d(in_channels, in_channels // 2, 3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
-        )
-        self.up2 = nn.Sequential(
-            nn.Conv2d(in_channels // 2, in_channels // 4, 3, padding=1),
-            nn.ReLU(inplace=True),
-            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
-        )
-        self.final = nn.Conv2d(in_channels // 4, out_channels, 1)
-
-    def forward(self, x):
-        x = self.up1(x)
-        x = self.up2(x)
-        x = self.final(x)
-        return x  # [B, num_class, H, W]
-
 class MaskDecoder(nn.Module):
     def __init__(
         self,
         *,
+        img_size: List,
         transformer_dim: int,
         transformer: nn.Module,
-        num_multimask_outputs: int = 3,
+        num_multimask_outputs: int = 1,
         activation: Type[nn.Module] = nn.GELU,
-        iou_head_depth: int = 3,
-        iou_head_hidden_dim: int = 256,
     ) -> None:
         """
         Predicts masks given an image and prompt embeddings, using a
@@ -379,8 +363,7 @@ class MaskDecoder(nn.Module):
 
         self.num_multimask_outputs = num_multimask_outputs
 
-        self.iou_token = nn.Embedding(1, transformer_dim)
-        self.num_mask_tokens = num_multimask_outputs + 1
+        self.num_mask_tokens = num_multimask_outputs
         self.mask_tokens = nn.Embedding(self.num_mask_tokens, transformer_dim)
 
         self.output_upscaling = nn.Sequential(
@@ -396,31 +379,44 @@ class MaskDecoder(nn.Module):
                 for i in range(self.num_mask_tokens)
             ]
         )
-        self.dense_conv = nn.Sequential(
-            nn.Conv2d(1, transformer_dim , kernel_size=1, padding = 0),
+        self.H = self.W = img_size[0]
+
+        self.corse_encoder = nn.Sequential(
+            nn.Conv2d(self.num_mask_tokens, transformer_dim, kernel_size=1, stride=1),
             LayerNorm2d(transformer_dim),
-            activation(),
+            activation()
         )
-        self.iou_prediction_head = MLP(
-            transformer_dim, iou_head_hidden_dim, self.num_mask_tokens, iou_head_depth
-        )
+
+        # self.neck = nn.Sequential(
+        #     nn.Conv2d(
+        #         transformer_dim,
+        #         transformer_dim,
+        #         kernel_size=1,
+        #         bias=False,
+        #     ),
+        #     LayerNorm2d(transformer_dim),
+        #     nn.Conv2d(
+        #         transformer_dim,
+        #         transformer_dim,
+        #         kernel_size=3,
+        #         padding=1,
+        #         bias=False,
+        #     ),
+        #     LayerNorm2d(transformer_dim),
+        # )
 
     def forward(
         self,
         image_embeddings: torch.Tensor,
-        image_pe: torch.Tensor,
-        sparse_prompt_embeddings: torch.Tensor,
-        dense_prompt_embeddings: torch.Tensor,
-        multimask_output: bool,
+        corse_embeddings: torch.Tensor,
+        text_embeddings: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Predict masks given image and prompt embeddings.
 
         Arguments:
           image_embeddings (torch.Tensor): the embeddings from the image encoder
-          image_pe (torch.Tensor): positional encoding with the shape of image_embeddings
-          sparse_prompt_embeddings (torch.Tensor): the embeddings of the points and boxes
-          dense_prompt_embeddings (torch.Tensor): the embeddings of the mask inputs
+
           multimask_output (bool): Whether to return multiple masks or a single
             mask.
 
@@ -428,48 +424,52 @@ class MaskDecoder(nn.Module):
           torch.Tensor: batched predicted masks
           torch.Tensor: batched predictions of mask quality
         """
-        dense_prompt_embeddings = self.dense_conv(dense_prompt_embeddings)
-        masks, iou_pred = self.predict_masks(
+        #image_embeddings = self.neck(image_embeddings)
+        corse_embeddings = self.corse_encoder(corse_embeddings)
+        #corse_embeddings = self.mask_tokens(corse_embeddings)
+        b,c,h,w = image_embeddings.shape
+
+        masks = self.predict_masks(
             image_embeddings=image_embeddings,
-            image_pe=image_pe,
-            sparse_prompt_embeddings=sparse_prompt_embeddings,
-            dense_prompt_embeddings=dense_prompt_embeddings,
+            image_pe=build_2d_sincos_position_embedding(h,w,embed_dim=self.transformer_dim),
+            corse_embeddings= corse_embeddings,
+            text_embeddings = text_embeddings
         )
 
-        # Select the correct mask or masks for output
-        if multimask_output:
-             mask_slice = slice(1, None)
-        else:
-             mask_slice = slice(0, 1)
-        masks = masks[:, mask_slice, :, :]
-        iou_pred = iou_pred[:, mask_slice]
+
 
         # Prepare output
-        return masks, iou_pred
+        return masks
+
+
 
     def predict_masks(
         self,
         image_embeddings: torch.Tensor,
-        image_pe: torch.Tensor,
-        sparse_prompt_embeddings: torch.Tensor,
-        dense_prompt_embeddings: torch.Tensor,
+        image_pe:torch.tensor,
+        corse_embeddings: torch.Tensor,
+        text_embeddings: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Predicts masks. See 'forward' for more details."""
         # Concatenate output tokens
-        output_tokens = torch.cat([self.iou_token.weight, self.mask_tokens.weight], dim=0)
-        output_tokens = output_tokens.unsqueeze(0).expand(sparse_prompt_embeddings.size(0), -1, -1)
-        tokens = torch.cat((output_tokens, sparse_prompt_embeddings), dim=1)
+        tokens = self.mask_tokens.weight
+        tokens = tokens.unsqueeze(0).expand(corse_embeddings.size(0), -1, -1)
+        tokens = torch.cat((tokens, text_embeddings), dim=1)
 
         # Expand per-image data in batch direction to be per-mask
-        #src = torch.repeat_interleave(image_embeddings, tokens.shape[0], dim=0)
-        src = image_embeddings + dense_prompt_embeddings
-        pos_src = torch.repeat_interleave(image_pe, tokens.shape[0], dim=0)
-        b, c, h, w = src.shape
+
+        if len(image_embeddings.shape) == 3:
+            image_embeddings = einops.rearrange(image_embeddings, 'b (h w) c -> b c h w',h = int(math.sqrt(image_embeddings.shape[1])) )
+        b, c, h, w = image_embeddings.shape
+
+        image_embeddings = image_embeddings + corse_embeddings
+
+        pos_src = torch.repeat_interleave(image_pe, tokens.shape[0], dim=0).to(image_embeddings.device)
 
         # Run the transformer
-        hs, src = self.transformer(src, pos_src, tokens)
-        iou_token_out = hs[:, 0, :]
-        mask_tokens_out = hs[:, 1 : (1 + self.num_mask_tokens), :]
+        hs, src = self.transformer(image_embeddings,pos_src, tokens )
+
+        mask_tokens_out = hs
 
         # Upscale mask embeddings and predict masks using the mask tokens
         src = src.transpose(1, 2).view(b, c, h, w)
@@ -481,39 +481,19 @@ class MaskDecoder(nn.Module):
         b, c, h, w = upscaled_embedding.shape
         masks = (hyper_in @ upscaled_embedding.view(b, c, h * w)).view(b, -1, h, w)
 
+        masks = F.interpolate(masks, (self.H, self.W), mode='bilinear', align_corners=True)
+
         # Generate mask quality predictions
-        iou_pred = self.iou_prediction_head(iou_token_out)
-
-        return masks, iou_pred
-
-def dilate_mask(mask: torch.Tensor, kernel_size=5):
-    """
-    mask: [B, 1, H, W] float or binary
-    returns: [B, 1, H, W] dilated mask
-    """
-    B, _, H, W = mask.shape
-    kernel = torch.ones(1, 1, kernel_size, kernel_size, device=mask.device)
-    dilated = F.conv2d(mask, kernel, padding=kernel_size // 2)
-    return (dilated > 0).float()  # or > threshold
 
 
-def erode_mask(mask: torch.Tensor, kernel_size=3):
-    """
-    mask: [B, 1, H, W] float or binary
-    returns: [B, 1, H, W] eroded mask
-    """
-    B, _, H, W = mask.shape
-    kernel = torch.ones(1, 1, kernel_size, kernel_size, device=mask.device)
+        return masks
 
-    # Perform erosion with a convolution operation
-    eroded = F.conv2d(mask, kernel, padding=kernel_size // 2)
 
-    # Return the eroded mask (binary)
-    return (
-                eroded == kernel_size * kernel_size).float()  # Only keep the pixels that are fully eroded (all 1s in the kernel)
 class MultiMaskDecoder(MaskDecoder):
     def __init__(self,
                  *,
+                 img_size = [256],
+                 text_dim= 512,
                  transformer_dim: int,
                  transformer: nn.Module,
                  num_multimask_outputs: int = 2,
@@ -523,245 +503,33 @@ class MultiMaskDecoder(MaskDecoder):
                  **kwargs
                  ):
         super(MultiMaskDecoder, self).__init__(
+            img_size=img_size,
             transformer_dim  = transformer_dim,
             transformer = transformer,
             num_multimask_outputs = num_multimask_outputs,
             activation = activation,
             **kwargs
         )
-
-        # self.mask_weight = nn.Parameter(torch.ones(num_multimask_outputs), requires_grad=True)
-        #
-        # self.conv_out = nn.Sequential(
-        #     nn.Conv2d(num_multimask_outputs, num_class, kernel_size=1, stride=1),
-        # )
-
-        self.mask_weight = nn.Parameter(torch.ones(num_multimask_outputs), requires_grad=True)
-
-        self.conv_out = nn.Conv2d(num_multimask_outputs, num_class, kernel_size=1, stride=1)
-
-
+        self.conv_out = nn.Conv2d(n_feats * num_class, num_class,kernel_size=1, stride=1)
 
         self.norm_t = nn.LayerNorm(transformer_dim)
-
-    def forward(self, image_embeddings, dense_embed, dense_pe, sparse_embed, multimask_output=True):
-        B, C, H, W = dense_embed.shape
-        sparse_embed = self.norm_t(sparse_embed)
-
-        # Step 1: Coarse → Binary → Dilate
-        with torch.no_grad():
-            coarse_mask = torch.argmax(dense_embed, dim=1, keepdim=True).float()  # [B,1,H,W]
-            #coarse_mask = dilate_mask(coarse_mask, kernel_size=3)
-            change_mask = (coarse_mask.flatten(1).sum(dim=1) > 0)  # [B]
-
-        #final_mask = torch.zeros((B, self.conv_out.out_channels, H * 4, W * 4), device=dense_embed.device).float()
-        final_mask = F.interpolate(dense_embed, size=(H * 4,  W * 4), mode='bilinear', align_corners=False).float()
-
-        if change_mask.any():
-            idx = change_mask.nonzero(as_tuple=True)[0]
-
-            x_sub = image_embeddings[0][idx]
-            pe_sub = dense_pe
-            s_sub = sparse_embed[idx]
-            d_sub = coarse_mask[idx]
-
-            # 一次性 forward
-            masks_sub, _ = super(MultiMaskDecoder, self).forward(
-                x_sub, pe_sub, s_sub, d_sub, multimask_output=multimask_output
-            )
-            masks_sub = masks_sub * self.mask_weight.view(1, -1, 1, 1)
-            output_sub = self.conv_out(masks_sub)  # [B', num_class, H, W]
-
-            # 写回原 batch 中对应位置
-            final_mask[idx] = output_sub.float()
-
-        return final_mask
-
-    # corse_pred=torch.zeros_like(x_list[0],device=t_embedding.device)
-       #  for x in x_list:
-       #      masks.append(super(MultiMaskDecoder, self).forward(x, dense_pe,sparse_embed,dense_embed,  False))
-       #  masks = torch.cat(masks,dim=1)
-       #  masks = self.conv_out(masks)
-       #  return masks
-
-from models.sam.modeling.prompt_encoder import PositionEmbeddingRandom
-
-
-from timm.models.layers import trunc_normal_,to_2tuple
-
-class ChangeDecoder(MaskDecoder):
-    def __init__(self,
-                 *,
-                 transformer_dim: int,
-                 transformer: nn.Module,
-                 num_multimask_outputs: int = 2,
-                 activation: Type[nn.Module] = nn.GELU,
-                 n_feats=4,
-                 fpn_planes = [512,512,512,512],
-                 num_class=2,
-                 **kwargs):
-        super(ChangeDecoder, self).__init__(
-            transformer_dim=transformer_dim,
-            transformer=transformer,
-            num_multimask_outputs=num_multimask_outputs,
-            activation=activation,
-            **kwargs
-        )
-
-        # Define mask weights for each output mask
-        self.mask_weight = nn.Parameter(torch.ones(num_multimask_outputs), requires_grad=True)
-
-        # Define output layers for each level's predictions
-        self.conv_out = nn.ModuleList([
-            nn.Conv2d(num_multimask_outputs, num_class, kernel_size=1, stride=1) for _ in range(4)
-        ])
-
-        # Define convolution layers for coarse predictions at each level
-        self.conv_pred = nn.ModuleList([
-            nn.Conv2d(fpn_planes[3] + num_multimask_outputs, num_multimask_outputs, kernel_size=3, stride=1, padding=1),
-            nn.Conv2d(fpn_planes[2] + num_multimask_outputs, num_multimask_outputs, kernel_size=3, stride=1, padding=1),
-            nn.Conv2d(fpn_planes[1] + num_multimask_outputs, num_multimask_outputs, kernel_size=3, stride=1, padding=1),
-            nn.Conv2d(fpn_planes[0] , num_multimask_outputs, kernel_size=3, stride=1, padding=1),
-        ])
-
-        # Define convolution layers for upsampling (decoder layers)
-        self.upconv = nn.ModuleList([
-            nn.ConvTranspose2d(transformer_dim, transformer_dim, kernel_size=2, stride=2) for _ in range(4)
-        ])
-
-        # Define positional encoding (PE) encoder
-        self.pe_encoders = nn.ModuleList([
-           PositionEmbeddingRandom(fpn_planes[i] // 2) for i in range(4)
-        ])
-
-        # Layer normalization for sparse embeddings
-        self.norm_t = nn.LayerNorm(transformer_dim)
-
-        # Define the mask decoders for each level
-        self.masks_decoder = nn.ModuleList([
-            MaskDecoder(transformer_dim=fpn_planes[i], transformer=transformer, num_multimask_outputs=num_multimask_outputs, activation=activation)
-            for i in range(4)
-        ])
-
-        # Learnable weights for the level-wise predictions (Weighted Averaging)
-        self.level_weights = nn.Parameter(torch.ones(4), requires_grad=True)
-
-        self.norm1 = nn.LayerNorm(fpn_planes[0])
-        self.norm2 = nn.LayerNorm(fpn_planes[1])
-        self.norm3 = nn.LayerNorm(fpn_planes[2])
-        self.norm4 = nn.LayerNorm(fpn_planes[3])
-
-        self.up1 = nn.Sequential(*[
-            nn.ConvTranspose2d(transformer_dim, transformer_dim//2, 2, 2),
-            nn.GroupNorm(32, transformer_dim //2),
-            nn.GELU(),
-            nn.ConvTranspose2d(transformer_dim//2, fpn_planes[0], 2, 2)
-        ])
-        self.up2 = nn.ConvTranspose2d(transformer_dim, fpn_planes[1], 2, 2)
-        self.up3 = nn.Identity()
-        self.up4 =nn.Conv2d(transformer_dim, fpn_planes[3], 2, 2)
-
-        self.up1.apply(self._init_weights)
-        self.up2.apply(self._init_weights)
-        self.up3.apply(self._init_weights)
-        self.up4.apply(self._init_weights)
-
-    def _init_weights(self, m):
-        if isinstance(m, nn.Linear):
-            trunc_normal_(m.weight, std=.02)
-            if isinstance(m, nn.Linear) and m.bias is not None:
-                nn.init.constant_(m.bias, 0)
-        elif isinstance(m, nn.LayerNorm):
-            nn.init.constant_(m.bias, 0)
-            nn.init.constant_(m.weight, 1.0)
-    def build_pyramid_features(self, x):
-        assert isinstance(x, tuple) or isinstance(x, list)
-        f1, f2, f3, f4 = x
-        b,hw,dim = f1.shape
-        h = w = int(math.sqrt(hw))
-        # b, dim, h,w = f1.size()
-        # f1 = einops.rearrange(f1, 'b c h w -> b (h w) c')
-        # f2 = einops.rearrange(f2, 'b c h w -> b (h w) c')
-        # f3 = einops.rearrange(f3, 'b c h w -> b (h w) c')
-        # f4 = einops.rearrange(f4, 'b c h w -> b (h w) c')
-        f1 = self.norm1(f1).transpose(1, 2).reshape(-1, dim, h, w)
-        f2 = self.norm2(f2).transpose(1, 2).reshape(-1, dim, h, w)
-        f3 = self.norm3(f3).transpose(1, 2).reshape(-1, dim, h, w)
-        f4 = self.norm4(f4).transpose(1, 2).reshape(-1, dim, h, w)
-
-        f1 = self.up1(f1).contiguous()
-        f2 = self.up2(f2).contiguous()
-        f3 = self.up3(f3).contiguous()
-
-        f4 = self.up4(f4).contiguous()
-        return [f1, f2, f3, f4]
-
-    def process_level(self, x, level, sparse_embed, dense_embed, multimask_output=True, skip_connection=None):
-        """ Helper function to process each level with skip connection """
-        # Coarse prediction
-        b, c ,h, w = x.shape
-
-        if skip_connection is not None:
-            skip_connection = F.interpolate(skip_connection, size=(h, w), mode='bilinear', align_corners=True)
-            coarse_pred = torch.argmax(self.conv_pred[level](torch.cat([x, skip_connection], dim=1)), dim=1, keepdim = True).float()
-        else:
-            dense_embed = F.interpolate(x, size=(h, w), mode='bilinear', align_corners=True)
-            coarse_pred = torch.argmax(torch.softmax(dense_embed, dim=1),dim = 1,keepdim=True).float()
-        #coarse_pred = torch.randn((b,1,h,w))
-        # Adjust positional encoding (dense_pe) according to the size of the feature map at each level
-        dense_pe = self.pe_encoders[level](x.shape[-2:]).to(dense_embed.device).unsqueeze(0)  # Adjust for current feature map size
-
-        # Apply decoder
-        masks, _ = self.masks_decoder[level](x, dense_pe, sparse_embed, coarse_pred, multimask_output)
-
-
-        # Final output layer
-        return self.conv_out[level](masks)
-
-    def forward(self, image_embeddings, dense_embed, sparse_embed, multimask_output=True):
-        B, C, H, W = dense_embed.shape
-
-        # Normalize sparse embeddings
-        sparse_embed = self.norm_t(sparse_embed)
-
-        pyramid_features = self.build_pyramid_features(image_embeddings)
-
-        # Unpack the pyramid features for each level
-        x0, x1, x2, x3 = pyramid_features
-
-        # Process each level using the helper function and add skip connections
-        skip_connections = [None] * 4
-        predictions = []
-
-        # Level 4 (Bottom-most level)
-        x3_pred = self.process_level(x3, 3, sparse_embed, dense_embed, multimask_output, skip_connection=None)
-        predictions.append(x3_pred)
-
-        # Level 3
-        x2 = self.upconv[3](x3) + x2  # Skip connection from x4_pred
-        x2_pred = self.process_level(x2, 2, sparse_embed, dense_embed, multimask_output, skip_connection=x3_pred)
-        predictions.append(x2_pred)
-
-        # Level 2
-        x1 = self.upconv[2](x2) + x1  # Skip connection from x3_pred
-        x1_pred = self.process_level(x1, 1, sparse_embed, dense_embed, multimask_output, skip_connection=x2_pred)
-        predictions.append(x1_pred)
-
-        # Level 1
-        x0 = self.upconv[1](x1) + x0  # Skip connection from x2_pred
-        x0_pred = self.process_level(x0, 0, sparse_embed, dense_embed, multimask_output, skip_connection=x1_pred)
-        predictions.append(x0_pred)
-
-        # Level 0 (Top-most level)
-
-        return x0_pred
+    def forward(self, x_list, corse_pred,t_embedding):
+        masks = []
+        t_embedding = self.norm_t(t_embedding)
+        corse_pred = torch.softmax(corse_pred, dim=1)
+       # corse_pred=torch.zeros_like(x_list[0],device=t_embedding.device)
+        for x in x_list:
+            masks.append(super(MultiMaskDecoder, self).forward(x, corse_pred, t_embedding))
+        masks = torch.cat(masks,dim=1)
+        masks = self.conv_out(masks)
+        return masks
 
 
 if __name__ == '__main__':
     import torch
 
     # Define some hyperparameters
-    B = 1  # Batch size
+    B = 2  # Batch size
     embedding_dim = 512  # Example embedding dimension
     num_heads = 8  # Example number of attention heads
     mlp_dim = 2048  # Example MLP dimension
@@ -772,24 +540,31 @@ if __name__ == '__main__':
     text_length = 2  # Number of tokens in text input
 
     # Create random image and text embeddings
-    image_embedding = 4*[torch.randn(B, embedding_dim, 16, 16)]  # Example image embedding of shape B x C x H x W
+    image_embedding = torch.randn(B, embedding_dim, 64, 64)  # Example image embedding of shape B x C x H x W
     text_embedding = torch.randn(B, text_length, embedding_dim)  # Example text embedding of shape B x N x C
-    dense_embed = torch.randn(B, embedding_dim, 16, 16)
-    decoder = ChangeDecoder(
-        transformer_dim=embedding_dim,
-        transformer=TwoWayTransformer(
-            depth=2,
-            embedding_dim=embedding_dim,
-            num_heads=8,
-            mlp_dim=1024
-        ),
-        num_multimask_outputs=2,
-        activation=nn.ReLU,
-        n_feats=1,
-        num_class=2
+
+    # Initialize the TwoWayTransformer model
+    transformer_model = TwoWayTransformer(
+        depth=depth,
+        embedding_dim=embedding_dim,
+        num_heads=num_heads,
+        mlp_dim=mlp_dim,
+        activation=activation,
+        attention_downsample_rate=attention_downsample_rate,
     )
 
-    masks = decoder(image_embedding, dense_embed, text_embedding, multimask_output=True)
+    # Initialize the MaskDecoder model
+    mask_decoder = MaskDecoder(
+        transformer_dim=embedding_dim,
+        transformer=transformer_model,
+        num_multimask_outputs=num_multimask_outputs,
+        activation=activation,
+    )
+
+    # Forward pass through the MaskDecoder
+    multimask_output = True  # Whether to return multiple masks
+    masks = mask_decoder(image_embeddings=image_embedding, text_embeddings=text_embedding,
+                         multimask_output=multimask_output)
 
     # Print the output shapes
     print("Output shape of masks:", masks.shape)  # Expected shape: (B, num_masks, H, W)
