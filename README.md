@@ -92,7 +92,7 @@ python main.py --phase train \
 Example:
 ```bash
 python main.py --phase train \
-               --configs ./configs/default_config.yml \
+               --configs ./configs/changefine_livercd.yml \
                --gpu 0 \
                --suptxt ./dataset/train.json \
                --valtxt ./dataset/val.json \
@@ -112,7 +112,7 @@ python main.py --phase test \
 Example (with visualization):
 ```bash
 python main.py --phase test \
-               --configs ./configs/default_config.yml \
+               --configs ./configs/changefine_livercd.yml \
                --gpu 0 \
                --suptxt ./dataset/train.json \
                --valtxt ./dataset/val.json \
